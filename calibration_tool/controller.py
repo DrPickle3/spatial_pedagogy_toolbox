@@ -24,8 +24,9 @@ class Controller:
         # self.view.image_canvas.bind("<Button-3>", lambda event: self._delete_landmark(event, 'image'))
         # self.view.csv_canvas.bind("<Button-3>", lambda event: self._delete_landmark(event, 'csv'))
 
-    def load_image(self):
-        path = filedialog.askopenfilename(filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg;*.jpeg")])
+    def load_image(self, path=None):
+        if not path:
+            path = filedialog.askopenfilename(filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg;*.jpeg")])
         if not path:
             return
         try:
@@ -41,8 +42,9 @@ class Controller:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load or process image file: {e}")
 
-    def load_csv(self):
-        path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+    def load_csv(self, path=None):
+        if not path:
+            path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if not path:
             return
         try:
