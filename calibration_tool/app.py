@@ -3,11 +3,34 @@ from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 
+class ScrollableFrame(ttk.Frame):
+    """A scrollable frame widget."""
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        canvas = tk.Canvas(self)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        self.scrollable_frame = ttk.Frame(canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+
 class App(tk.Frame):
     """The main GUI for the calibration tool."""
-    def __init__(self, master):
+    def __init__(self, master, canvas_size=500): # <-- Modify this line
         super().__init__(master)
         self.master = master
+        self.canvas_size = canvas_size # <-- Add this line
         self.master.title("2D Affine Transformation Calibration Tool")
         self.pack(fill="both", expand=True)
 
@@ -38,16 +61,30 @@ class App(tk.Frame):
 
         # Main frames
         self.top_frame = ttk.Frame(self)
-        self.middle_frame = ttk.Frame(self)
+        self.middle_frame = ttk.Frame(self, height=150)
+        self.middle_frame.pack_propagate(False)
         self.bottom_frame = ttk.Frame(self)
 
         # Canvases
-        self.csv_canvas = tk.Canvas(self.top_frame, bg="white", width=500, height=500)
-        self.image_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=500, height=500)
+        # Use the canvas_size attribute
+        self.csv_canvas = tk.Canvas(self.top_frame, bg="white", width=self.canvas_size, height=self.canvas_size) # <-- Modify
+        self.image_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=self.canvas_size, height=self.canvas_size) # <-- Modify
 
         # Landmark list frames
-        self.csv_landmarks_frame = ttk.LabelFrame(self.middle_frame, text="CSV Landmarks")
-        self.image_landmarks_frame = ttk.LabelFrame(self.middle_frame, text="Image Landmarks")
+        # Create instances of our new ScrollableFrame
+        csv_scroll_container = ScrollableFrame(self.middle_frame)
+        img_scroll_container = ScrollableFrame(self.middle_frame)
+
+        # The LabelFrame now goes inside the scrollable area
+        self.csv_landmarks_frame = ttk.LabelFrame(csv_scroll_container.scrollable_frame, text="CSV Landmarks")
+        self.image_landmarks_frame = ttk.LabelFrame(img_scroll_container.scrollable_frame, text="Image Landmarks")
+
+        self.csv_landmarks_frame.pack(fill="both", expand=True)
+        self.image_landmarks_frame.pack(fill="both", expand=True)
+
+        # Pack the containers
+        csv_scroll_container.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        img_scroll_container.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
         # Bottom controls
         self.calibrate_button = ttk.Button(self.bottom_frame, text="Calibrate", state="disabled",
@@ -62,9 +99,6 @@ class App(tk.Frame):
 
         self.csv_canvas.pack(side="left", fill="both", expand=True, padx=(0, 5))
         self.image_canvas.pack(side="right", fill="both", expand=True, padx=(5, 0))
-
-        self.csv_landmarks_frame.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        self.image_landmarks_frame.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
         self.calibrate_button.pack(pady=5)
 
@@ -103,17 +137,20 @@ class App(tk.Frame):
 
         sorted_keys = sorted(landmarks_image.keys())
 
-        for key in sorted_keys:
+        for i, key in enumerate(sorted_keys):
+            row = i % 6
+            col = i // 6
+
             # Add to image list
             img_coord = landmarks_image[key]
             img_text = f"#{key}: ({img_coord[0]:.1f}, {img_coord[1]:.1f})"
-            ttk.Label(self.image_landmarks_frame, text=img_text).pack(anchor="w")
+            ttk.Label(self.image_landmarks_frame, text=img_text).grid(row=row, column=col, sticky='w', padx=5)
 
             # Add to csv list
             if key in landmarks_csv:
                 csv_coord = landmarks_csv[key]
                 csv_text = f"#{key}: ({csv_coord[0]:.1f}, {csv_coord[1]:.1f})"
-                ttk.Label(self.csv_landmarks_frame, text=csv_text).pack(anchor="w")
+                ttk.Label(self.csv_landmarks_frame, text=csv_text).grid(row=row, column=col, sticky='w', padx=5)
 
     def clear_landmarks(self):
         self.csv_canvas.delete("landmark")

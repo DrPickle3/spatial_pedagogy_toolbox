@@ -2,11 +2,23 @@ import tkinter as tk
 from tkinter import simpledialog
 from datetime import datetime
 import os
+import argparse # <-- Import
 from calibration_tool.app import App
 from calibration_tool.model import CalibrationModel
 from calibration_tool.controller import Controller
 
 if __name__ == "__main__":
+    # --- Add this block ---
+    parser = argparse.ArgumentParser(description="2D Affine Transformation Calibration Tool.")
+    parser.add_argument(
+        '--canvas-size',
+        type=int,
+        default=500,
+        help="The width and height in pixels for the main image canvases."
+    )
+    args = parser.parse_args()
+    # --- End block ---
+
     root = tk.Tk()
     root.withdraw()  # Hide the main window until we have the experiment name
 
@@ -21,12 +33,15 @@ if __name__ == "__main__":
         root.deiconify() # Show the main window
         root.title("2D Affine Transformation Calibration Tool")
         
-        # Set a minimum size for the window, and allow it to be resizable
-        root.minsize(850, 600)
+        width = args.canvas_size * 2 + 40
+        height = args.canvas_size + 200
+        root.geometry(f"{width}x{height}")
+        root.minsize(width, height)
         root.resizable(True, True)
 
         model = CalibrationModel()
-        view = App(root)
+        # Pass the canvas_size to the App constructor
+        view = App(root, canvas_size=args.canvas_size) # <-- Modify this line
         controller = Controller(model, view, experiment_path=experiment_path)
         view.controller = controller
         

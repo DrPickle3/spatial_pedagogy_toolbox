@@ -128,7 +128,7 @@ class Controller:
         image_points, csv_points = self.model.get_landmark_pairs()
         
         try:
-            results = calculate_affine_transform(image_points, csv_points)
+            results = calculate_affine_transform(csv_points, image_points)
             self.model.calibration_results = results
             
             overlay_image = self._create_overlay_image()
@@ -146,18 +146,18 @@ class Controller:
 
         image_points, csv_points = self.model.get_landmark_pairs()
         
-        # Augment and transform image points
-        A = np.hstack([image_points, np.ones((image_points.shape[0], 1))])
+        # Augment and transform csv points
+        A = np.hstack([csv_points, np.ones((csv_points.shape[0], 1))])
         affine_matrix = np.array(self.model.calibration_results['affine_matrix'])[:2, :].T
         transformed_points = np.dot(A, affine_matrix)
 
-        for i in range(len(csv_points)):
-            # Draw target CSV points (as red crosses)
-            p_csv = csv_points[i]
-            draw.line((p_csv[0]-5, p_csv[1], p_csv[0]+5, p_csv[1]), fill="red", width=2)
-            draw.line((p_csv[0], p_csv[1]-5, p_csv[0], p_csv[1]+5), fill="red", width=2)
+        for i in range(len(image_points)):
+            # Draw target image points (as red crosses)
+            p_target = image_points[i]
+            draw.line((p_target[0]-5, p_target[1], p_target[0]+5, p_target[1]), fill="red", width=2)
+            draw.line((p_target[0], p_target[1]-5, p_target[0], p_target[1]+5), fill="red", width=2)
 
-            # Draw transformed image points (as blue circles)
+            # Draw transformed csv points (as blue circles)
             p_transformed = transformed_points[i]
             draw.ellipse((p_transformed[0]-3, p_transformed[1]-3, p_transformed[0]+3, p_transformed[1]+3), fill="blue", outline="blue")
 
@@ -203,8 +203,9 @@ class Controller:
         x_min, y_min = raw_data.min(axis=0)
         x_max, y_max = raw_data.max(axis=0)
         
-        scale_x = 500 / (x_max - x_min)
-        scale_y = 500 / (y_max - y_min)
+        target_dim = self.view.canvas_size
+        scale_x = target_dim / (x_max - x_min) if (x_max - x_min) > 0 else 1
+        scale_y = target_dim / (y_max - y_min) if (y_max - y_min) > 0 else 1
         scale = min(scale_x, scale_y)
 
         scaled_data = (raw_data - [x_min, y_min]) * scale
@@ -244,9 +245,13 @@ class Controller:
 
         # Scale Image
         width, height = cropped_image.size
-        scale = min(500 / width, 500 / height)
-        new_size = (int(width * scale), int(height * scale))
-        scaled_image = cropped_image.resize(new_size, Image.LANCZOS)
+        target_dim = self.view.canvas_size
+        if width > 0 and height > 0:
+            scale = min(target_dim / width, target_dim / height)
+            new_size = (int(width * scale), int(height * scale))
+            scaled_image = cropped_image.resize(new_size, Image.LANCZOS)
+        else:
+            scaled_image = cropped_image
 
         # Save Processed Image
         processed_image_path = os.path.join(self.model.experiment_path, "processed_image.png")
