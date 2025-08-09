@@ -1,0 +1,109 @@
+Of course. Here is a detailed prompt to implement the requested preprocessing workflow for your calibration tool. This will refactor the existing application to standardize the inputs and create a self-contained experiment folder for each run.
+
+---
+
+### **Project: Preprocessing and Standardization Workflow**
+
+**Objective:** To implement a preprocessing pipeline at the start of the application. This involves creating a dedicated experiment folder and then normalizing both the CSV data and the input image before they are presented to the user in the GUI. This ensures that calibration is always performed on standardized, comparable assets.
+
+You will need the `image.py` file you provided. Ensure it is placed within the `spatial_pedagogy_toolbox` directory so it can be imported as `from . import image`.
+
+---
+
+### **Phase 1: Experiment Setup**
+
+**Objective:** On application launch, prompt the user for an experiment name and create a timestamped folder to store all generated files.
+
+1.  **Read the @README.md and @CODEBASE.md files.**
+2.  **Establish a Baseline:** Run any existing tests.
+3.  **Update Dependencies:**
+    * `pip install -e .`
+    * You will need `scikit-image` for the `image.py` script. If not already installed: `pip install scikit-image`.
+4.  **Modify `main.py` (or wherever the `App` is instantiated):**
+    * Before creating the main `App` window, use `tkinter.simpledialog.askstring` to show a pop-up asking for an "Experiment Name".
+    * If the user cancels, exit the application.
+    * If a name is provided, create a timestamp string (e.g., `YYYYMMDD_HHMMSS`).
+    * Combine them to create a folder name: `f"{experiment_name}_{timestamp}"`.
+    * Use `os.path.join` and `os.makedirs` to create this folder in the current working directory.
+    * Pass this new folder path to the `Controller`'s constructor.
+
+5.  **Update Model and Controller:**
+    * In `model.py`, add `self.experiment_path = None` to the `CalibrationModel.__init__`.
+    * In `controller.py`, modify `Controller.__init__` to accept the `experiment_path` and store it in the model.
+
+---
+
+### **Phase 2: Refactor CSV Loading and Processing**
+
+**Objective:** Intercept the CSV loading process to scale the coordinates, save the result, generate a visualization image from the scaled points, crop it, and display it in the left GUI panel.
+
+1.  **Modify `Controller.load_csv()`:**
+    * This method should now orchestrate the new preprocessing workflow.
+    * After loading the raw data with `np.loadtxt`, call a new private helper method, `_preprocess_csv(raw_data)`.
+    * This helper will return a `PIL.Image` object.
+    * The final image from the preprocessing steps should be displayed on the left canvas.
+
+2.  **Create `Controller._preprocess_csv(raw_data)`:**
+    * This new method will contain the core CSV processing logic:
+        a.  **Scale Coordinates:** Calculate the bounding box of `raw_data`. Determine a scaling factor to fit the points into a 1000x1000 space while preserving the aspect ratio. Translate the points so the minimum corner is near (0,0).
+        b.  **Save Scaled CSV:** Save this new NumPy array of scaled coordinates to a file named `scaled_coordinates.csv` inside the `self.model.experiment_path`.
+        c.  **Generate Image from Points:** Call another helper, `_create_image_from_coords(scaled_data)`, which creates and returns a `PIL.Image` visualization.
+        d.  **Save Visualization:** Save the generated image to the experiment folder as `points_visualization.png`.
+        e.  **Final Crop:** Use the `image.auto_crop(img, borders=50)` function on the visualization.
+        f.  **Return** the final cropped image.
+
+3.  **Create `Controller._create_image_from_coords(scaled_data)`:**
+    * This helper function takes the scaled points.
+    * It should determine the bounds of the scaled data and create a white `Pillow` image slightly larger than these bounds.
+    * Using `ImageDraw`, iterate through the points and draw a small black circle at each coordinate.
+    * Return the `PIL.Image` object.
+
+4.  **Update `App` for Left Panel Display:**
+    * The `plot_csv_data` method is now obsolete. The left canvas will display an image, just like the right one.
+    * Rename or repurpose `display_image` to be more generic, or create a new method `display_left_image(img_tk)` that specifically targets `self.csv_canvas`. It should perform the same actions as `display_image`: delete old content, create the new image, and hold a reference.
+
+---
+
+### **Phase 3: Refactor PNG Loading and Processing**
+
+**Objective:** Intercept the image loading process to crop, scale, save the result, and then re-crop it for display in the right GUI panel.
+
+1.  **Modify `Controller.load_image()`:**
+    * This method will now orchestrate the image preprocessing workflow.
+    * After loading the initial image with `Image.open()`, pass it to a new helper method, `_preprocess_image(raw_image)`.
+    * This helper will return the final `PIL.Image` object to be displayed.
+
+2.  **Create `Controller._preprocess_image(raw_image)`:**
+    * This method will perform the multi-step image processing:
+        a.  **First Crop:** Call `image.auto_crop(raw_image, borders=0)`.
+        b.  **Scale Image:** Scale the result of the first crop to fit within a 1000x1000 space, preserving the aspect ratio.
+        c.  **Save Processed Image:** Save this scaled image to the `self.model.experiment_path` as `processed_image.png`.
+        d.  **Second Crop:** Call `image.auto_crop` on the scaled image, this time with `borders=50`.
+        e.  **Return** the final cropped image.
+
+---
+
+### **Phase 4: Final Adjustments**
+
+**Objective:** Ensure the rest of the application, particularly the calibration and saving logic, works with the new preprocessed assets.
+
+1.  **Coordinate System:**
+    * Acknowledge that the landmark selection (`_add_landmark_start`/`_add_landmark_end`) is now performed on the **pixel coordinates of the two images displayed in the GUI**. This is simpler than mapping back to original data coordinates. The calibration finds the transformation between these two processed image spaces.
+
+2.  **Calibration Overlay (`_create_overlay_image`):**
+    * The `base_image` for the overlay should be the **processed image displayed in the right panel**.
+    * The `csv_points` used for drawing the target crosses should be the landmark coordinates **selected from the left panel's image**.
+    * The `image_points` used for transformation will be the landmark coordinates **selected from the right panel's image**. The transformation will map these points into the left panel's coordinate space.
+
+3.  **Saving Results (`save_results`):**
+    * The `save_results` function is already well-structured. Ensure that the filenames written into the JSON (`csv_file`, `image_file`) refer to the **original, user-selected files**, not the processed ones. This maintains a clear record of the source data.
+    * All save operations (both the JSON and the overlay PNG) must use the `self.model.experiment_path` as the destination directory.
+
+After implementing these changes, run the application. The flow should be:
+1.  Pop-up for experiment name.
+2.  Folder is created.
+3.  User loads a CSV -> left panel shows a cropped, black-and-white image of the points.
+4.  User loads a PNG -> right panel shows a double-cropped, scaled version of the image.
+5.  Calibration and saving proceed, with all artifacts stored in the experiment folder.
+
+Finally, run all tests and update your `@README.md` and `@CODEBASE.md` to reflect this new, more robust workflow.
