@@ -15,28 +15,14 @@ class Controller:
         self.model = model
         self.view = view
         self.model.experiment_path = experiment_path
-        self._pending_landmark_id = None
         self._bind_events()
 
     def _bind_events(self):
-        self.view.image_canvas.bind("<Button-1>", lambda event: self._add_landmark_start(event))
-        self.view.csv_canvas.bind("<Button-1>", lambda event: self._add_landmark_end(event))
-        self.view.image_canvas.bind("<Button-3>", lambda event: self._delete_landmark(event, 'image'))
-        self.view.csv_canvas.bind("<Button-3>", lambda event: self._delete_landmark(event, 'csv'))
-
-    def load_csv(self):
-        path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if not path:
-            return
-        try:
-            raw_data = np.loadtxt(path, delimiter=',')
-            self.model.csv_path = path
-            processed_image = self._preprocess_csv(raw_data)
-            self.model.image_tk = ImageTk.PhotoImage(processed_image)
-            self.view.display_left_image(self.model.image_tk)
-            self.view.update_status(f"Loaded and processed CSV: {path}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load or process CSV file: {e}")
+        self.view.image_canvas.bind("<Button-1>", lambda event: self._add_landmark(event, 'image'))
+        self.view.csv_canvas.bind("<Button-1>", lambda event: self._add_landmark(event, 'csv'))
+        # Right-click to delete is complex with the new list-based model, so disabling for now.
+        # self.view.image_canvas.bind("<Button-3>", lambda event: self._delete_landmark(event, 'image'))
+        # self.view.csv_canvas.bind("<Button-3>", lambda event: self._delete_landmark(event, 'csv'))
 
     def load_image(self):
         path = filedialog.askopenfilename(filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg;*.jpeg")])
@@ -50,76 +36,57 @@ class Controller:
             self.model.image_tk = ImageTk.PhotoImage(self.model.image)
             self.view.display_image(self.model.image_tk)
             self.view.update_status(f"Loaded and processed Image: {path}")
+            self.model.clear_landmarks()
+            self._redraw_landmarks()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load or process image file: {e}")
 
-    def _get_next_landmark_id(self):
-        if not self.model.landmarks_image:
-            return 1
-        return max(self.model.landmarks_image.keys()) + 1
-
-    def _add_landmark_start(self, event):
-        if self._pending_landmark_id:
-            self.view.update_status("Error: Select the corresponding point on the CSV panel first.")
+    def load_csv(self):
+        path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if not path:
             return
-        if len(self.model.landmarks_image) >= 12:
-            self.view.update_status("Error: Maximum of 12 landmarks reached.")
-            return
+        try:
+            raw_data = np.loadtxt(path, delimiter=',')
+            self.model.csv_path = path
+            processed_image = self._preprocess_csv(raw_data)
+            self.model.csv_tk = ImageTk.PhotoImage(processed_image)
+            self.view.display_csv_as_image(self.model.csv_tk)
+            self.view.update_status(f"Loaded and processed CSV: {path}")
+            self.model.clear_landmarks()
+            self._redraw_landmarks()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load or process CSV file: {e}")
 
-        landmark_id = self._get_next_landmark_id()
-        self._pending_landmark_id = landmark_id
+    def _add_landmark(self, event, canvas_type):
+        point = (event.x - 25, event.y - 25) # Subtract padding
+        if canvas_type == 'image':
+            if not self.model.add_image_landmark(point):
+                self.view.update_status("Maximum number of image landmarks (12) reached.")
+                return
+        elif canvas_type == 'csv':
+            if not self.model.add_csv_landmark(point):
+                self.view.update_status("Maximum number of CSV landmarks (12) reached.")
+                return
         
-        x, y = event.x, event.y
-        self.model.landmarks_image[landmark_id] = (x, y)
-        
-        self.view.draw_landmark(self.view.image_canvas, x, y, landmark_id)
-        self.view.update_landmark_lists(self.model.landmarks_csv, self.model.landmarks_image)
-        self.view.update_status(f"Select corresponding point for Landmark #{landmark_id} on the left panel.")
-
-    def _add_landmark_end(self, event):
-        if not self._pending_landmark_id:
-            self.view.update_status("Error: Select a point on the image panel first.")
-            return
-
-        landmark_id = self._pending_landmark_id
-        x, y = event.x, event.y
-        
-        # This is a simplified mapping. A real implementation might need to map canvas coords back to data coords.
-        # For this example, we store canvas coordinates for simplicity.
-        self.model.landmarks_csv[landmark_id] = (x, y)
-        
-        self.view.draw_landmark(self.view.csv_canvas, x, y, landmark_id, color="green")
-        self.view.update_landmark_lists(self.model.landmarks_csv, self.model.landmarks_image)
-        self.view.update_status(f"Paired Landmark #{landmark_id}. Select a new point on the image panel.")
-        self._pending_landmark_id = None
+        self._redraw_landmarks()
         self._update_calibrate_button_state()
 
-    def _delete_landmark(self, event, canvas_type):
-        canvas = self.view.image_canvas if canvas_type == 'image' else self.view.csv_canvas
-        item = canvas.find_closest(event.x, event.y)
-        tags = canvas.gettags(item)
-        
-        landmark_id = None
-        for tag in tags:
-            if tag.startswith("landmark_"):
-                landmark_id = int(tag.split("_")[1])
-                break
-        
-        if landmark_id:
-            self.model.delete_landmark(landmark_id)
-            self.view.clear_landmarks() # Simple redraw all
-            for lid, (x,y) in self.model.landmarks_image.items():
-                self.view.draw_landmark(self.view.image_canvas, x, y, lid)
-            for lid, (x,y) in self.model.landmarks_csv.items():
-                self.view.draw_landmark(self.view.csv_canvas, x, y, lid, color="green")
+    def undo_last_point(self):
+        self.model.undo_last_landmark()
+        self._redraw_landmarks()
+        self._update_calibrate_button_state()
 
-            self.view.update_landmark_lists(self.model.landmarks_csv, self.model.landmarks_image)
-            self.view.update_status(f"Deleted Landmark #{landmark_id}.")
-            self._update_calibrate_button_state()
+    def _redraw_landmarks(self):
+        self.view.clear_landmarks()
+        for i, (x, y) in enumerate(self.model.landmarks_image):
+            self.view.draw_landmark(self.view.image_canvas, x + 25, y + 25, i + 1, color="red")
+        for i, (x, y) in enumerate(self.model.landmarks_csv):
+            self.view.draw_landmark(self.view.csv_canvas, x + 25, y + 25, i + 1, color="green")
+        self.view.update_landmark_lists(self.model.landmarks_csv, self.model.landmarks_image)
 
     def _update_calibrate_button_state(self):
-        num_pairs = len(self.model.landmarks_csv)
-        if 4 <= num_pairs <= 12:
+        num_pairs = min(len(self.model.landmarks_image), len(self.model.landmarks_csv))
+        if num_pairs >= 3:
             self.view.calibrate_button.config(state="normal")
         else:
             self.view.calibrate_button.config(state="disabled")
@@ -127,6 +94,10 @@ class Controller:
     def run_calibration(self):
         image_points, csv_points = self.model.get_landmark_pairs()
         
+        if len(image_points) < 3:
+            messagebox.showerror("Calibration Error", "At least 3 landmark pairs are required.")
+            return
+
         try:
             results = calculate_affine_transform(csv_points, image_points)
             self.model.calibration_results = results
@@ -140,26 +111,40 @@ class Controller:
             messagebox.showerror("Error", f"An unexpected error occurred during calibration: {e}")
 
     def _create_overlay_image(self):
-        base_image = self.model.image.copy().convert("RGBA")
+        # Ensure the base image for overlay is the one displayed on the canvas, with padding
+        base_image = Image.new("RGBA", (self.view.canvas_size, self.view.canvas_size), (211, 211, 211, 255))
+        base_image.paste(self.model.image, (25, 25))
         overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
         image_points, csv_points = self.model.get_landmark_pairs()
+        affine_matrix_2x3 = np.array(self.model.calibration_results['affine_matrix'])[:2, :]
         
-        # Augment and transform csv points
-        A = np.hstack([csv_points, np.ones((csv_points.shape[0], 1))])
-        affine_matrix = np.array(self.model.calibration_results['affine_matrix'])[:2, :].T
-        transformed_points = np.dot(A, affine_matrix)
+        # 1. Draw all scaled CSV points transformed
+        print(self.model.scaled_csv_data)
+        if self.model.scaled_csv_data is not None:
+            all_csv_points_padded = np.hstack([self.model.scaled_csv_data, np.ones((self.model.scaled_csv_data.shape[0], 1))])
+            all_transformed_points = np.dot(all_csv_points_padded, affine_matrix_2x3.T)
+            for p in all_transformed_points:
+                print(p)
+                # Offset by padding for drawing
+                p_draw = p + 25
+                draw.ellipse((p_draw[0]-2, p_draw[1]-2, p_draw[0]+2, p_draw[1]+2), fill=(0, 0, 255, 50))
+
+        # 2. Draw user-selected landmark pairs
+        csv_points_padded = np.hstack([csv_points, np.ones((csv_points.shape[0], 1))])
+        transformed_landmark_points = np.dot(csv_points_padded, affine_matrix_2x3.T)
 
         for i in range(len(image_points)):
             # Draw target image points (as red crosses)
-            p_target = image_points[i]
+            p_target = image_points[i] + 25 # Offset by padding
             draw.line((p_target[0]-5, p_target[1], p_target[0]+5, p_target[1]), fill="red", width=2)
             draw.line((p_target[0], p_target[1]-5, p_target[0], p_target[1]+5), fill="red", width=2)
 
-            # Draw transformed csv points (as blue circles)
-            p_transformed = transformed_points[i]
-            draw.ellipse((p_transformed[0]-3, p_transformed[1]-3, p_transformed[0]+3, p_transformed[1]+3), fill="blue", outline="blue")
+            # Draw transformed csv points (as dark blue circles)
+            p_transformed = transformed_landmark_points[i] + 25 # Offset by padding
+            print(p_transformed)
+            draw.ellipse((p_transformed[0]-4, p_transformed[1]-4, p_transformed[0]+4, p_transformed[1]+4), fill="blue", outline="black")
 
         return Image.alpha_composite(base_image, overlay)
 
@@ -203,12 +188,13 @@ class Controller:
         x_min, y_min = raw_data.min(axis=0)
         x_max, y_max = raw_data.max(axis=0)
         
-        target_dim = self.view.canvas_size
+        target_dim = self.view.canvas_size - 50 # Account for 25px padding on each side
         scale_x = target_dim / (x_max - x_min) if (x_max - x_min) > 0 else 1
         scale_y = target_dim / (y_max - y_min) if (y_max - y_min) > 0 else 1
         scale = min(scale_x, scale_y)
 
         scaled_data = (raw_data - [x_min, y_min]) * scale
+        self.model.scaled_csv_data = scaled_data # Store in model
 
         # Save Scaled CSV
         scaled_csv_path = os.path.join(self.model.experiment_path, "scaled_coordinates.csv")
@@ -245,7 +231,7 @@ class Controller:
 
         # Scale Image
         width, height = cropped_image.size
-        target_dim = self.view.canvas_size
+        target_dim = self.view.canvas_size - 50 # Account for 25px padding on each side
         if width > 0 and height > 0:
             scale = min(target_dim / width, target_dim / height)
             new_size = (int(width * scale), int(height * scale))
@@ -253,12 +239,11 @@ class Controller:
         else:
             scaled_image = cropped_image
 
-        # Save Processed Image
-        processed_image_path = os.path.join(self.model.experiment_path, "processed_image.png")
-        scaled_image.save(processed_image_path)
-
         # Second Crop
         final_image_np = image.auto_crop(np.array(scaled_image), borders=50)
         final_image = Image.fromarray(final_image_np)
 
+        # Save Processed Image
+        processed_image_path = os.path.join(self.model.experiment_path, "processed_image.png")
+        final_image.save(processed_image_path)
         return final_image

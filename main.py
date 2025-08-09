@@ -19,6 +19,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # --- End block ---
 
+    # Add 150 to the canvas size
+    canvas_size = args.canvas_size
+
     root = tk.Tk()
     root.withdraw()  # Hide the main window until we have the experiment name
 
@@ -33,15 +36,15 @@ if __name__ == "__main__":
         root.deiconify() # Show the main window
         root.title("2D Affine Transformation Calibration Tool")
         
-        width = args.canvas_size * 2 + 40
-        height = args.canvas_size + 200
+        width = canvas_size * 2 + 200
+        height = canvas_size + 300
         root.geometry(f"{width}x{height}")
         root.minsize(width, height)
         root.resizable(True, True)
 
         model = CalibrationModel()
         # Pass the canvas_size to the App constructor
-        view = App(root, canvas_size=args.canvas_size) # <-- Modify this line
+        view = App(root, canvas_size=canvas_size) # <-- Modify this line
         controller = Controller(model, view, experiment_path=experiment_path)
         view.controller = controller
         

@@ -54,8 +54,8 @@ class App(tk.Frame):
         self.master.config(menu=self.menu_bar)
         file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Load CSV...", command=lambda: self.controller.load_csv())
         file_menu.add_command(label="Load Image...", command=lambda: self.controller.load_image())
+        file_menu.add_command(label="Load CSV...", command=lambda: self.controller.load_csv())
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.master.quit)
 
@@ -66,30 +66,27 @@ class App(tk.Frame):
         self.bottom_frame = ttk.Frame(self)
 
         # Canvases
-        # Use the canvas_size attribute
-        self.csv_canvas = tk.Canvas(self.top_frame, bg="white", width=self.canvas_size, height=self.canvas_size) # <-- Modify
-        self.image_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=self.canvas_size, height=self.canvas_size) # <-- Modify
+        self.image_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=self.canvas_size, height=self.canvas_size)
+        self.csv_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=self.canvas_size, height=self.canvas_size)
 
         # Landmark list frames
-        # Create instances of our new ScrollableFrame
-        csv_scroll_container = ScrollableFrame(self.middle_frame)
         img_scroll_container = ScrollableFrame(self.middle_frame)
+        csv_scroll_container = ScrollableFrame(self.middle_frame)
 
-        # The LabelFrame now goes inside the scrollable area
-        self.csv_landmarks_frame = ttk.LabelFrame(csv_scroll_container.scrollable_frame, text="CSV Landmarks")
         self.image_landmarks_frame = ttk.LabelFrame(img_scroll_container.scrollable_frame, text="Image Landmarks")
+        self.csv_landmarks_frame = ttk.LabelFrame(csv_scroll_container.scrollable_frame, text="CSV Landmarks")
 
-        self.csv_landmarks_frame.pack(fill="both", expand=True)
         self.image_landmarks_frame.pack(fill="both", expand=True)
+        self.csv_landmarks_frame.pack(fill="both", expand=True)
 
-        # Pack the containers
-        csv_scroll_container.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        img_scroll_container.pack(side="right", fill="x", expand=True, padx=(5, 0))
+        img_scroll_container.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        csv_scroll_container.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
         # Bottom controls
+        self.undo_button = ttk.Button(self.bottom_frame, text="Undo Last Point", command=lambda: self.controller.undo_last_point())
         self.calibrate_button = ttk.Button(self.bottom_frame, text="Calibrate", state="disabled",
                                            command=lambda: self.controller.run_calibration())
-        self.status_bar = ttk.Label(self, text="Load a CSV file and an image to begin.", anchor="w")
+        self.status_bar = ttk.Label(self, text="Load an image and a CSV file to begin.", anchor="w")
 
     def _create_layout(self):
         self.top_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
@@ -97,10 +94,18 @@ class App(tk.Frame):
         self.bottom_frame.pack(side="top", fill="x", expand=False, padx=10, pady=10)
         self.status_bar.pack(side="bottom", fill="x", expand=False, padx=10, pady=2)
 
-        self.csv_canvas.pack(side="left", fill="both", expand=True, padx=(0, 5))
-        self.image_canvas.pack(side="right", fill="both", expand=True, padx=(5, 0))
+        self.image_canvas.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        self.csv_canvas.pack(side="right", fill="both", expand=True, padx=(5, 0))
 
-        self.calibrate_button.pack(pady=5)
+        self.undo_button.pack(side="left", padx=10, pady=5)
+        self.calibrate_button.pack(side="right", padx=10, pady=5)
+
+    def _bind_events(self):
+        # Bind motion events for coordinate tracking
+        self.image_canvas.bind("<Motion>", lambda e: self._track_coords(e, "Image Panel"))
+        self.csv_canvas.bind("<Motion>", lambda e: self._track_coords(e, "CSV Panel"))
+        self.image_canvas.bind("<Leave>", self._reset_status)
+        self.csv_canvas.bind("<Leave>", self._reset_status)
 
     def update_status(self, text):
         self.status_bar.config(text=text)
@@ -115,12 +120,14 @@ class App(tk.Frame):
 
     def display_image(self, img_tk):
         self.image_canvas.delete("all")
-        self.image_canvas.create_image(0, 0, anchor="nw", image=img_tk)
+        self.image_canvas.create_image(25, 25, anchor="nw", image=img_tk)
+        self.image_canvas.create_rectangle(25, 25, 25 + img_tk.width(), 25 + img_tk.height(), outline="black")
         self.image_canvas.image = img_tk  # Keep a reference
 
-    def display_left_image(self, img_tk):
+    def display_csv_as_image(self, img_tk):
         self.csv_canvas.delete("all")
-        self.csv_canvas.create_image(0, 0, anchor="nw", image=img_tk)
+        self.csv_canvas.create_image(25, 25, anchor="nw", image=img_tk)
+        self.csv_canvas.create_rectangle(25, 25, 25 + img_tk.width(), 25 + img_tk.height(), outline="black")
         self.csv_canvas.image = img_tk  # Keep a reference
 
     def draw_landmark(self, canvas, x, y, number, color="red"):
@@ -135,27 +142,24 @@ class App(tk.Frame):
         for widget in self.image_landmarks_frame.winfo_children():
             widget.destroy()
 
-        sorted_keys = sorted(landmarks_image.keys())
-
-        for i, key in enumerate(sorted_keys):
+        for i, (x, y) in enumerate(landmarks_image):
             row = i % 6
             col = i // 6
-
-            # Add to image list
-            img_coord = landmarks_image[key]
-            img_text = f"#{key}: ({img_coord[0]:.1f}, {img_coord[1]:.1f})"
+            img_text = f"#{i+1}: ({x:.1f}, {y:.1f})"
             ttk.Label(self.image_landmarks_frame, text=img_text).grid(row=row, column=col, sticky='w', padx=5)
 
-            # Add to csv list
-            if key in landmarks_csv:
-                csv_coord = landmarks_csv[key]
-                csv_text = f"#{key}: ({csv_coord[0]:.1f}, {csv_coord[1]:.1f})"
-                ttk.Label(self.csv_landmarks_frame, text=csv_text).grid(row=row, column=col, sticky='w', padx=5)
+        for i, (x, y) in enumerate(landmarks_csv):
+            row = i % 6
+            col = i // 6
+            csv_text = f"#{i+1}: ({x:.1f}, {y:.1f})"
+            ttk.Label(self.csv_landmarks_frame, text=csv_text).grid(row=row, column=col, sticky='w', padx=5)
 
     def clear_landmarks(self):
-        self.csv_canvas.delete("landmark")
         self.image_canvas.delete("landmark")
-        self.update_landmark_lists({}, {})
+        self.csv_canvas.delete("landmark")
+        # The lists in the view are cleared and redrawn by the controller,
+        # so we just need to clear the canvas drawings here.
+        self.update_landmark_lists([], [])
 
     def show_results_window(self, results, overlay_image):
         results_window = tk.Toplevel(self.master)

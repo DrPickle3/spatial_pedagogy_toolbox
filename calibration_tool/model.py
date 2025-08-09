@@ -7,40 +7,49 @@ class CalibrationModel:
     def __init__(self):
         self.csv_path = None
         self.image_path = None
-        self.csv_data = None
         self.image = None
         self.image_tk = None
-        self.landmarks_csv = {}
-        self.landmarks_image = {}
+        self.landmarks_csv = []
+        self.landmarks_image = []
+        self.action_history = []
+        self.scaled_csv_data = None
         self.calibration_results = {}
         self.experiment_path = None
 
-    def load_csv_data(self, file_path):
-        """Loads CSV data from a file path."""
-        self.csv_path = file_path
-        self.csv_data = np.loadtxt(file_path, delimiter=',')
-        # Reset landmarks when new data is loaded
-        self.landmarks_csv = {}
+    def clear_landmarks(self):
+        self.landmarks_csv = []
+        self.landmarks_image = []
+        self.action_history = []
+        self.scaled_csv_data = None
 
-    def get_csv_coords(self):
-        """Returns the CSV data as a NumPy array."""
-        return self.csv_data
+    def add_image_landmark(self, point):
+        if len(self.landmarks_image) < 12:
+            self.landmarks_image.append(point)
+            self.action_history.append('image')
+            return True
+        return False
 
-    def add_landmark(self, landmark_id, csv_coord, image_coord):
-        """Adds a landmark pair."""
-        self.landmarks_csv[landmark_id] = csv_coord
-        self.landmarks_image[landmark_id] = image_coord
+    def add_csv_landmark(self, point):
+        if len(self.landmarks_csv) < 12:
+            self.landmarks_csv.append(point)
+            self.action_history.append('csv')
+            return True
+        return False
 
-    def delete_landmark(self, landmark_id):
-        """Deletes a landmark pair."""
-        if landmark_id in self.landmarks_csv:
-            del self.landmarks_csv[landmark_id]
-        if landmark_id in self.landmarks_image:
-            del self.landmarks_image[landmark_id]
+    def undo_last_landmark(self):
+        if not self.action_history:
+            return
+
+        last_action = self.action_history.pop()
+        if last_action == 'image' and self.landmarks_image:
+            self.landmarks_image.pop()
+        elif last_action == 'csv' and self.landmarks_csv:
+            self.landmarks_csv.pop()
 
     def get_landmark_pairs(self):
         """Returns the landmark pairs as two lists of coordinates."""
-        sorted_keys = sorted(self.landmarks_image.keys())
-        image_points = np.array([self.landmarks_image[key] for key in sorted_keys])
-        csv_points = np.array([self.landmarks_csv[key] for key in sorted_keys])
+        num_pairs = min(len(self.landmarks_image), len(self.landmarks_csv))
+        image_points = np.array(self.landmarks_image[:num_pairs])
+        csv_points = np.array(self.landmarks_csv[:num_pairs])
         return image_points, csv_points
+
