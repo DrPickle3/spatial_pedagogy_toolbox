@@ -20,7 +20,6 @@ class CalibrationModel:
         self.landmarks_csv = []
         self.landmarks_image = []
         self.action_history = []
-        self.scaled_csv_data = None
 
     def add_image_landmark(self, point):
         if len(self.landmarks_image) < 12:

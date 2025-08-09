@@ -111,9 +111,12 @@ class Controller:
             messagebox.showerror("Error", f"An unexpected error occurred during calibration: {e}")
 
     def _create_overlay_image(self):
-        # Ensure the base image for overlay is the one displayed on the canvas, with padding
-        base_image = Image.new("RGBA", (self.view.canvas_size, self.view.canvas_size), (211, 211, 211, 255))
-        base_image.paste(self.model.image, (25, 25))
+        # Create a white base image matching the canvas size
+        base_image = Image.new("RGBA", (self.view.canvas_size, self.view.canvas_size), (255, 255, 255, 255))
+        # Paste the model's image onto the white base, respecting the padding
+        PADDING = 0
+        base_image.paste(self.model.image, (PADDING, PADDING))
+        
         overlay = Image.new("RGBA", base_image.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
@@ -121,15 +124,13 @@ class Controller:
         affine_matrix_2x3 = np.array(self.model.calibration_results['affine_matrix'])[:2, :]
         
         # 1. Draw all scaled CSV points transformed
-        print(self.model.scaled_csv_data)
         if self.model.scaled_csv_data is not None:
             all_csv_points_padded = np.hstack([self.model.scaled_csv_data, np.ones((self.model.scaled_csv_data.shape[0], 1))])
             all_transformed_points = np.dot(all_csv_points_padded, affine_matrix_2x3.T)
             for p in all_transformed_points:
-                print(p)
                 # Offset by padding for drawing
-                p_draw = p + 25
-                draw.ellipse((p_draw[0]-2, p_draw[1]-2, p_draw[0]+2, p_draw[1]+2), fill=(0, 0, 255, 50))
+                p_draw = p + PADDING
+                draw.ellipse((p_draw[0]-2, p_draw[1]-2, p_draw[0]+2, p_draw[1]+2), fill=(0, 0, 255, 100))
 
         # 2. Draw user-selected landmark pairs
         csv_points_padded = np.hstack([csv_points, np.ones((csv_points.shape[0], 1))])
@@ -137,14 +138,13 @@ class Controller:
 
         for i in range(len(image_points)):
             # Draw target image points (as red crosses)
-            p_target = image_points[i] + 25 # Offset by padding
+            p_target = image_points[i] + PADDING # Offset by padding
             draw.line((p_target[0]-5, p_target[1], p_target[0]+5, p_target[1]), fill="red", width=2)
             draw.line((p_target[0], p_target[1]-5, p_target[0], p_target[1]+5), fill="red", width=2)
 
             # Draw transformed csv points (as dark blue circles)
-            p_transformed = transformed_landmark_points[i] + 25 # Offset by padding
-            print(p_transformed)
-            draw.ellipse((p_transformed[0]-4, p_transformed[1]-4, p_transformed[0]+4, p_transformed[1]+4), fill="blue", outline="black")
+            p_transformed = transformed_landmark_points[i] + PADDING # Offset by padding
+            draw.ellipse((p_transformed[0]-4, p_transformed[1]-4, p_transformed[0]+4, p_transformed[1]+4), fill="darkblue", outline="black")
 
         return Image.alpha_composite(base_image, overlay)
 
