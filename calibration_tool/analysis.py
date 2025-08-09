@@ -1,6 +1,7 @@
 import numpy as np
 import time
 
+
 def calculate_affine_transform(image_points, csv_points):
     """
     Calculates the 2x3 affine transformation matrix from image points to csv points.
@@ -14,7 +15,9 @@ def calculate_affine_transform(image_points, csv_points):
               and computation time.
     """
     if len(image_points) < 3:
-        raise ValueError("At least 3 landmark pairs are required for affine transformation.")
+        raise ValueError(
+            "At least 3 landmark pairs are required for affine transformation."
+        )
 
     start_time = time.perf_counter()
 
@@ -28,7 +31,7 @@ def calculate_affine_transform(image_points, csv_points):
     affine_matrix = x.T
 
     # Reshape to a 3x3 matrix for easier transformations
-    affine_matrix_3x3 = np.vstack([affine_matrix, [0, 0, 1]])
+    affine_matrix_3x3 = np.vstack([affine_matrix[:2, :], [0, 0, 1]])
 
     # Apply the transformation to the image points
     transformed_points = np.dot(A, x)[:, 0:2]
@@ -43,7 +46,7 @@ def calculate_affine_transform(image_points, csv_points):
     computation_time = time.perf_counter() - start_time
 
     return {
-        "affine_matrix": affine_matrix_3x3.tolist(),
+        "affine_matrix": affine_matrix_3x3,
         "errors": errors.tolist(),
         "min_error": min_error,
         "max_error": max_error,

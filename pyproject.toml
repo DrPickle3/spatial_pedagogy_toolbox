@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spatial_pedagogy_toolbox"
+version = "0.1.0"
+description = "A tool with a graphical user interface for calculating the 2D affine transformation between a set of CSV coordinates and a corresponding image."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "Pillow",
+    "scikit-image",
+]
+
+[tool.setuptools]
+packages = ["calibration_tool"]

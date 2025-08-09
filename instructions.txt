@@ -1,0 +1,361 @@
+I will now provide a comprehensive plan to add rigorous testing, consistent code formatting, and detailed documentation to your project.
+
+Begin by reading the @README.md and @CODEBASE.md files to understand the project's state.
+Your first step should be to run existing tests to establish a baseline. After running tests, install the project's dependencies with `pip install -e .` and then install `pytest` with `pip install pytest`. Ensure that all tests pass before making any changes.
+When you add new files or functions, write corresponding tests where appropriate. At the end of your work, run all tests again to confirm they still pass. Update @README.md and @CODEBASE.md to reflect any changes you have made.
+Your code must be modular and easy to modify or extend in the future. Verify any Pygame usage against its current documentation to ensure you are using the most up-to-date practices.
+
+### **Analysis of Current State**
+
+After reviewing the provided files, it's clear that the refactoring described in `instructions.txt` has already been implemented. The current codebase in `main.py`, `controller.py`, and `model.py` reflects the desired experiment-based workflow.
+
+Therefore, this plan will focus on the remaining and most crucial tasks: adding a robust test suite, standardizing the code format, and creating comprehensive documentation for the existing, refactored application.
+
+-----
+
+### **Phase 1: Project Setup and Dependencies**
+
+**Objective:** To establish a clean, reproducible development environment and create the necessary file structure for testing and dependency management.
+
+1.  **Create `requirements.txt`:** This file will list the runtime dependencies. Create a new file named `requirements.txt` in the root `spatial_pedagogy_toolbox` directory with the following content:
+
+    ```
+    numpy
+    Pillow
+    scikit-image
+    ```
+
+2.  **Create `requirements-dev.txt`:** This file will list dependencies needed only for development and testing. Create a new file named `requirements-dev.txt` in the root directory:
+
+    ```
+    -r requirements.txt
+    pytest
+    pytest-cov
+    black
+    ```
+
+3.  **Setup Virtual Environment and Install:**
+
+      * Create and activate a Python virtual environment.
+      * Install all dependencies: `pip install -r requirements-dev.txt`
+      * Install the project in editable mode: `pip install -e .`
+
+4.  **Create Test Directory:**
+
+      * In the root `spatial_pedagogy_toolbox` directory, create a new directory named `tests`.
+
+-----
+
+### **Phase 2: Add Rigorous Tests**
+
+**Objective:** To write unit tests for the core logic of the application, ensuring the mathematical calculations and image processing functions are correct and protected against future changes.
+
+**Justification:** A solid test suite is the most critical component for a scientific or data-processing tool. It validates the correctness of the underlying algorithms (`analysis.py`, `image.py`) and application state (`model.py`), making the entire tool more reliable and easier to maintain.
+
+1.  **Create `tests/test_analysis.py`:**
+
+      * This file will test the affine transformation logic.
+      * Add the following content to `tests/test_analysis.py`:
+        ```python
+        import numpy as np
+        import pytest
+        from spatial_pedagogy_toolbox.calibration_tool.analysis import calculate_affine_transform
+
+        def test_calculate_affine_transform_success():
+            # A simple transformation: scale by 2 and translate by (10, 20)
+            image_points = np.array([[10, 10], [20, 10], [10, 20]])
+            csv_points = np.array([[30, 40], [50, 40], [30, 60]]) # (p*2 + [10, 20])
+
+            results = calculate_affine_transform(image_points, csv_points)
+            
+            expected_matrix = np.array([
+                [2.0, 0.0, 10.0],
+                [0.0, 2.0, 20.0],
+                [0.0, 0.0, 1.0]
+            ])
+            
+            assert results is not None
+            np.testing.assert_allclose(results['affine_matrix'], expected_matrix, atol=1e-6)
+            assert results['mean_error'] < 1e-6
+
+        def test_calculate_affine_transform_insufficient_points():
+            image_points = np.array([[10, 10], [20, 10]])
+            csv_points = np.array([[30, 40], [50, 40]])
+
+            with pytest.raises(ValueError, match="At least 3 landmark pairs are required"):
+                calculate_affine_transform(image_points, csv_points)
+        ```
+
+2.  **Create `tests/test_model.py`:**
+
+      * This file will test the application's state management.
+      * Add the following content to `tests/test_model.py`:
+        ```python
+        import pytest
+        from spatial_pedagogy_toolbox.calibration_tool.model import CalibrationModel
+
+        @pytest.fixture
+        def model():
+            return CalibrationModel()
+
+        def test_initial_state(model):
+            assert model.landmarks_csv == []
+            assert model.landmarks_image == []
+            assert model.action_history == []
+
+        def test_add_landmarks(model):
+            model.add_image_landmark((10, 20))
+            model.add_csv_landmark((30, 40))
+            assert model.landmarks_image == [(10, 20)]
+            assert model.landmarks_csv == [(30, 40)]
+            assert model.action_history == ['image', 'csv']
+
+        def test_undo_last_landmark(model):
+            model.add_image_landmark((10, 20))
+            model.add_csv_landmark((30, 40))
+            model.undo_last_landmark()
+            assert model.landmarks_csv == []
+            assert model.landmarks_image == [(10, 20)]
+            assert model.action_history == ['image']
+            model.undo_last_landmark()
+            assert model.landmarks_image == []
+            assert model.action_history == []
+
+        def test_clear_landmarks(model):
+            model.add_image_landmark((10, 20))
+            model.add_csv_landmark((30, 40))
+            model.clear_landmarks()
+            assert model.landmarks_csv == []
+            assert model.landmarks_image == []
+            assert model.action_history == []
+
+        def test_get_landmark_pairs(model):
+            model.add_image_landmark((1, 1))
+            model.add_csv_landmark((10, 10))
+            model.add_image_landmark((2, 2))
+            model.add_csv_landmark((20, 20))
+            model.add_image_landmark((3, 3)) # Unpaired
+            
+            img_pts, csv_pts = model.get_landmark_pairs()
+            
+            assert img_pts.shape == (2, 2)
+            assert csv_pts.shape == (2, 2)
+            np.testing.assert_array_equal(img_pts, np.array([[1, 1], [2, 2]]))
+            np.testing.assert_array_equal(csv_pts, np.array([[10, 10], [20, 20]]))
+        ```
+
+3.  **Create `tests/test_image.py`:**
+
+      * This file tests the image processing utilities. It's the most complex test file.
+      * Add the following content to `tests/test_image.py`.
+        ```python
+        import numpy as np
+        import pytest
+        from PIL import Image
+        from spatial_pedagogy_toolbox.calibration_tool.image import auto_crop, remove_background, pad_image_to_center
+
+        @pytest.fixture
+        def sample_image_array():
+            # Create a 100x100 image with a white background (255)
+            # and a 20x30 black rectangle (0) inside.
+            img = np.full((100, 100, 3), 255, dtype=np.uint8)
+            img[40:60, 35:65] = [10, 20, 30] # The object
+            return img
+
+        def test_auto_crop_no_border(sample_image_array):
+            cropped_img = auto_crop(sample_image_array, borders=0)
+            # Should crop to the 20x30 rectangle
+            assert cropped_img.shape == (20, 30, 3)
+            # Check if the content is the rectangle's color
+            np.testing.assert_array_equal(cropped_img[0, 0], [10, 20, 30])
+
+        def test_auto_crop_with_border(sample_image_array):
+            cropped_img = auto_crop(sample_image_array, borders=10)
+            # Should be 20x30 rectangle + 10px border
+            assert cropped_img.shape == (30, 40, 3)
+
+        def test_remove_background(sample_image_array):
+            # The background is at (0,0) with value 255
+            img_rgba, mask = remove_background(sample_image_array, init_pos=(0, 0), threshold=10)
+            assert img_rgba.shape == (100, 100, 4) # Should have an alpha channel
+            # Mask should be 0 (transparent) for the background
+            assert mask[0, 0] == 0
+            # Mask should be 255 (opaque) for the foreground object
+            assert mask[50, 50] == 255
+
+        def test_pad_image_to_center():
+            small_img = np.full((10, 20, 3), 50, dtype=np.uint8)
+            padded_img = pad_image_to_center(small_img, (30, 40)) # new_shape is (width, height)
+            
+            # Pillow uses (width, height), numpy uses (height, width)
+            assert padded_img.shape == (40, 30, 3) 
+            
+            # Check that the original image is centered
+            # y_center = (40-10)//2 = 15, x_center = (30-20)//2 = 5
+            assert padded_img[15, 5, 0] == 50
+            assert padded_img[15+9, 5+19, 0] == 50
+            # Check a background pixel
+            assert padded_img[0, 0, 0] != 50
+        ```
+
+4.  **Run All Tests:**
+
+      * From the root `spatial_pedagogy_toolbox` directory, run:
+        ```bash
+        pytest --cov=spatial_pedagogy_toolbox
+        ```
+      * This will execute all tests and generate a code coverage report, showing how much of your logic is covered by tests.
+
+-----
+
+### **Phase 3: Code Formatting**
+
+**Objective:** To enforce a consistent, clean code style across the entire project.
+
+**Justification:** A uniform style makes the code significantly easier to read and understand for you and any future collaborators. `black` is an opinionated formatter that guarantees consistency.
+
+  * **Execute the Formatter:**
+      * From the root `spatial_pedagogy_toolbox` directory, run the following command:
+        ```bash
+        black .
+        ```
+      * This will automatically reformat all `.py` files in the project and tests directory to comply with the `black` style guide, including the 88-character line limit.
+
+-----
+
+### **Phase 4: Documentation**
+
+**Objective:** To create high-quality documentation that explains how to use the tool and how the codebase is structured.
+
+1.  **Create `README.md`:**
+
+      * This file is the front door to your project. It should be clear and concise.
+
+      * Replace the content of `spatial_pedagogy_toolbox/README.md` with the following:
+
+        ````markdown
+        # 2D Affine Transformation Calibration Toolbox
+
+        A tool with a graphical user interface for calculating the 2D affine transformation between a set of CSV coordinates and a corresponding image.
+
+        ## Features
+
+        * **Standardized Workflow**: Each run creates a dedicated, timestamped experiment folder to store all inputs and outputs.
+        * **Input Preprocessing**: Automatically scales and visualizes CSV data, and normalizes input images for consistent calibration.
+        * **Interactive Landmark Selection**: Interactively select corresponding points on the CSV data visualization and the image.
+        * **Affine Transformation**: Calculates the affine transformation matrix using a least-squares fit.
+        * **Visual Feedback**: Generates and displays an overlay image showing the accuracy of the transformation.
+        * **Save & Reload**: Save calibration results (matrix, error metrics, landmarks) to a JSON file and preload data via command-line for reproducibility.
+
+        ## Installation
+
+        1.  Clone the repository.
+        2.  It is highly recommended to use a Python virtual environment.
+        3.  Install the required dependencies:
+            ```bash
+            pip install -r requirements.txt
+            ```
+        4.  Install the toolbox package itself:
+            ```bash
+            pip install -e .
+            ```
+
+        ## Usage
+
+        1.  Run the application from the command line:
+            ```bash
+            python main.py
+            ```
+        2.  When prompted, enter a name for your experiment. A new directory named `Your-Name_YYYYMMDD_HHMMSS` will be created in the current directory.
+        3.  Use the **File > Load CSV...** menu to select your coordinate file. A visualization of the scaled points will appear in the left panel.
+        4.  Use the **File > Load Image...** menu to select your image file. A cropped and scaled version will appear in the right panel.
+        5.  Select landmark pairs by clicking a point on the **right image panel** and then its corresponding point on the **left CSV panel**.
+        6.  Once at least 3 pairs are selected, the **Calibrate** button will become active.
+        7.  Click **Calibrate** to compute the transformation. A results window will appear with statistics and an overlay image.
+        8.  Click **Save Results** to save the landmarks, transformation matrix, and overlay image into your experiment folder.
+
+        ### Command-Line Arguments
+
+        You can also automate the startup process using command-line arguments:
+
+        * `--canvas-size`: Set the size of the display canvases (e.g., `--canvas-size 800`).
+        * `--csv`: Preload a CSV file by providing its path.
+        * `--png`: Preload an image file by providing its path.
+        * `--experiment_name`: Specify the experiment name directly.
+        * `--force-overwrite`: If the experiment folder already exists and is not empty, this flag allows overwriting it.
+        ````
+
+2.  **Create `CODEBASE.md`:**
+
+      * This file is for developers. It explains the "how" and "why" of the code's design.
+
+      * Create a new file `spatial_pedagogy_toolbox/CODEBASE.md` with the following content:
+
+        ```markdown
+        # Codebase Architecture
+
+        This document provides a high-level overview of the design patterns, file structure, and core logic of the calibration toolbox.
+
+        ## Architectural Design: Model-View-Controller (MVC)
+
+        The application is structured using the **Model-View-Controller (MVC)** design pattern. This pattern separates the application's concerns into three distinct, interconnected components, which makes the code more organized, scalable, and easier to maintain.
+
+        * **Model (`calibration_tool/model.py`)**: The "brain" of the application.
+            - It holds all the application's data and state: file paths, landmark coordinates, action history, preprocessed data, and final calibration results.
+            - The Model is pure data and state management; it has no knowledge of the user interface and performs no calculations.
+
+        * **View (`calibration_tool/app.py`)**: The "face" of the application.
+            - Its sole responsibility is to present the data from the Model to the user.
+            - It builds the entire `tkinter` GUI, including canvases, buttons, and labels.
+            - It displays the images and draws the landmarks. It does not store any state itself, but rather reflects the state of the Model.
+            - User actions (mouse clicks, menu selections) are captured here but are handled by the Controller.
+
+        * **Controller (`calibration_tool/controller.py`)**: The "hands" and orchestrator of the application.
+            - It acts as the intermediary between the Model and the View.
+            - It contains all the application's business logic. It responds to user actions passed from the View (e.g., "Load CSV button clicked").
+            - It calls utility modules to perform tasks like preprocessing images (`image.py`) or running calculations (`analysis.py`).
+            - It updates the Model with new state (e.g., adding a landmark or storing calibration results).
+            - After the Model is updated, the Controller instructs the View to refresh itself to display the new state.
+
+        ## Project Structure
+
+        * `main.py`: The application entry point. It handles command-line argument parsing, sets up the timestamped experiment folder, and instantiates the Model, View, and Controller classes, wiring them together.
+        * `requirements.txt`: Lists the Python packages required to run the application.
+        * `tests/`: Contains all unit tests.
+        * `calibration_tool/`: The main application package.
+            * `app.py`: **(View)** Defines all `tkinter` widgets, the GUI layout, and methods for drawing on the canvases.
+            * `model.py`: **(Model)** A data class that holds the application's runtime state.
+            * `controller.py`: **(Controller)** The core logic hub. Orchestrates file loading, preprocessing, landmark management, calibration, and saving.
+            * `analysis.py`: **(Math/Logic)** Contains the `calculate_affine_transform` function, which performs the core mathematical computation using NumPy's least-squares algorithm.
+            * `image.py`: **(Image Processing/Logic)** A utility module containing functions for all image manipulations: `auto_crop`, `remove_background`, `resize`, and `pad_image_to_center`.
+
+        ## Core Logic Breakdown
+
+        The application logic can be split into three main categories:
+
+        1.  **UI Rendering (The View)**
+            - **Location:** `calibration_tool/app.py`
+            - **Key Functions:**
+                - `_create_widgets()` and `_create_layout()`: Build the static layout of the application window.
+                - `display_image()` and `display_csv_as_image()`: Update the canvases with new images.
+                - `draw_landmark()`: Draws the circles and numbers for landmarks.
+                - `show_results_window()`: Creates the pop-up window to display calibration statistics and the overlay image.
+
+        2.  **Mathematical and Image Processing (The Logic)**
+            - **Location:** `calibration_tool/analysis.py`, `calibration_tool/image.py`
+            - **Key Functions:**
+                - `calculate_affine_transform()` in `analysis.py`: This is the heart of the calibration. It takes two sets of corresponding points and computes the optimal 2x3 affine matrix that maps one set to the other.
+                - `auto_crop()` in `image.py`: Intelligently removes excess background from an image to frame the content.
+                - `remove_background()` in `image.py`: Uses a flood-fill algorithm to create a transparency mask for the image's background.
+
+        3.  **Orchestration and State Management (The Controller)**
+            - **Location:** `calibration_tool/controller.py`
+            - **Key Functions:**
+                - `__init__()` and `_bind_events()`: Wire up the controller to listen to events from the view.
+                - `load_csv()` and `load_image()`: Handle the file dialogs and initiate the preprocessing workflows.
+                - `_preprocess_csv()` and `_preprocess_image()`: Contain the multi-step pipelines for standardizing the input CSV and image files, including calling functions from `image.py`.
+                - `run_calibration()`: Gathers landmark pairs from the Model, calls `calculate_affine_transform`, and tells the View to display the results.
+                - `save_results()`: Gathers all relevant data from the Model and writes the JSON and overlay PNG files to the experiment directory.
+        ```
+
+By completing these phases, you will have a robust, well-tested, cleanly formatted, and thoroughly documented application that is easy to use, trust, and extend in the future.

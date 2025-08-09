@@ -5,6 +5,7 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont
 
 class ScrollableFrame(ttk.Frame):
     """A scrollable frame widget."""
+
     def __init__(self, container, *args, **kwargs):
         super().__init__(container, *args, **kwargs)
         canvas = tk.Canvas(self)
@@ -12,10 +13,7 @@ class ScrollableFrame(ttk.Frame):
         self.scrollable_frame = ttk.Frame(canvas)
 
         self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
 
         canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
@@ -27,10 +25,11 @@ class ScrollableFrame(ttk.Frame):
 
 class App(tk.Frame):
     """The main GUI for the calibration tool."""
-    def __init__(self, master, canvas_size=500): # <-- Modify this line
+
+    def __init__(self, master, canvas_size=500):  # <-- Modify this line
         super().__init__(master)
         self.master = master
-        self.canvas_size = canvas_size # <-- Add this line
+        self.canvas_size = canvas_size  # <-- Add this line
         self.master.title("2D Affine Transformation Calibration Tool")
         self.pack(fill="both", expand=True)
 
@@ -44,7 +43,9 @@ class App(tk.Frame):
     def _bind_events(self):
         # Bind motion events for coordinate tracking
         self.csv_canvas.bind("<Motion>", lambda e: self._track_coords(e, "Left Panel"))
-        self.image_canvas.bind("<Motion>", lambda e: self._track_coords(e, "Right Panel"))
+        self.image_canvas.bind(
+            "<Motion>", lambda e: self._track_coords(e, "Right Panel")
+        )
         self.csv_canvas.bind("<Leave>", self._reset_status)
         self.image_canvas.bind("<Leave>", self._reset_status)
 
@@ -54,8 +55,12 @@ class App(tk.Frame):
         self.master.config(menu=self.menu_bar)
         file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Load Image...", command=lambda: self.controller.load_image())
-        file_menu.add_command(label="Load CSV...", command=lambda: self.controller.load_csv())
+        file_menu.add_command(
+            label="Load Image...", command=lambda: self.controller.load_image()
+        )
+        file_menu.add_command(
+            label="Load CSV...", command=lambda: self.controller.load_csv()
+        )
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.master.quit)
 
@@ -66,15 +71,29 @@ class App(tk.Frame):
         self.bottom_frame = ttk.Frame(self)
 
         # Canvases
-        self.image_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=self.canvas_size, height=self.canvas_size)
-        self.csv_canvas = tk.Canvas(self.top_frame, bg="lightgray", width=self.canvas_size, height=self.canvas_size)
+        self.image_canvas = tk.Canvas(
+            self.top_frame,
+            bg="lightgray",
+            width=self.canvas_size,
+            height=self.canvas_size,
+        )
+        self.csv_canvas = tk.Canvas(
+            self.top_frame,
+            bg="lightgray",
+            width=self.canvas_size,
+            height=self.canvas_size,
+        )
 
         # Landmark list frames
         img_scroll_container = ScrollableFrame(self.middle_frame)
         csv_scroll_container = ScrollableFrame(self.middle_frame)
 
-        self.image_landmarks_frame = ttk.LabelFrame(img_scroll_container.scrollable_frame, text="Image Landmarks")
-        self.csv_landmarks_frame = ttk.LabelFrame(csv_scroll_container.scrollable_frame, text="CSV Landmarks")
+        self.image_landmarks_frame = ttk.LabelFrame(
+            img_scroll_container.scrollable_frame, text="Image Landmarks"
+        )
+        self.csv_landmarks_frame = ttk.LabelFrame(
+            csv_scroll_container.scrollable_frame, text="CSV Landmarks"
+        )
 
         self.image_landmarks_frame.pack(fill="both", expand=True)
         self.csv_landmarks_frame.pack(fill="both", expand=True)
@@ -83,10 +102,20 @@ class App(tk.Frame):
         csv_scroll_container.pack(side="right", fill="x", expand=True, padx=(5, 0))
 
         # Bottom controls
-        self.undo_button = ttk.Button(self.bottom_frame, text="Undo Last Point", command=lambda: self.controller.undo_last_point())
-        self.calibrate_button = ttk.Button(self.bottom_frame, text="Calibrate", state="disabled",
-                                           command=lambda: self.controller.run_calibration())
-        self.status_bar = ttk.Label(self, text="Load an image and a CSV file to begin.", anchor="w")
+        self.undo_button = ttk.Button(
+            self.bottom_frame,
+            text="Undo Last Point",
+            command=lambda: self.controller.undo_last_point(),
+        )
+        self.calibrate_button = ttk.Button(
+            self.bottom_frame,
+            text="Calibrate",
+            state="disabled",
+            command=lambda: self.controller.run_calibration(),
+        )
+        self.status_bar = ttk.Label(
+            self, text="Load an image and a CSV file to begin.", anchor="w"
+        )
 
     def _create_layout(self):
         self.top_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
@@ -102,7 +131,9 @@ class App(tk.Frame):
 
     def _bind_events(self):
         # Bind motion events for coordinate tracking
-        self.image_canvas.bind("<Motion>", lambda e: self._track_coords(e, "Image Panel"))
+        self.image_canvas.bind(
+            "<Motion>", lambda e: self._track_coords(e, "Image Panel")
+        )
         self.csv_canvas.bind("<Motion>", lambda e: self._track_coords(e, "CSV Panel"))
         self.image_canvas.bind("<Leave>", self._reset_status)
         self.csv_canvas.bind("<Leave>", self._reset_status)
@@ -121,18 +152,30 @@ class App(tk.Frame):
     def display_image(self, img_tk):
         self.image_canvas.delete("all")
         self.image_canvas.create_image(25, 25, anchor="nw", image=img_tk)
-        self.image_canvas.create_rectangle(25, 25, 25 + img_tk.width(), 25 + img_tk.height(), outline="black")
+        self.image_canvas.create_rectangle(
+            25, 25, 25 + img_tk.width(), 25 + img_tk.height(), outline="black"
+        )
         self.image_canvas.image = img_tk  # Keep a reference
 
     def display_csv_as_image(self, img_tk):
         self.csv_canvas.delete("all")
         self.csv_canvas.create_image(25, 25, anchor="nw", image=img_tk)
-        self.csv_canvas.create_rectangle(25, 25, 25 + img_tk.width(), 25 + img_tk.height(), outline="black")
+        self.csv_canvas.create_rectangle(
+            25, 25, 25 + img_tk.width(), 25 + img_tk.height(), outline="black"
+        )
         self.csv_canvas.image = img_tk  # Keep a reference
 
     def draw_landmark(self, canvas, x, y, number, color="red"):
         tag = f"landmark_{number}"
-        canvas.create_oval(x-5, y-5, x+5, y+5, fill=color, outline="black", tags=(tag, "landmark"))
+        canvas.create_oval(
+            x - 5,
+            y - 5,
+            x + 5,
+            y + 5,
+            fill=color,
+            outline="black",
+            tags=(tag, "landmark"),
+        )
         canvas.create_text(x, y, text=str(number), fill="white", tags=(tag, "landmark"))
         return tag
 
@@ -146,13 +189,17 @@ class App(tk.Frame):
             row = i % 6
             col = i // 6
             img_text = f"#{i+1}: ({x:.1f}, {y:.1f})"
-            ttk.Label(self.image_landmarks_frame, text=img_text).grid(row=row, column=col, sticky='w', padx=5)
+            ttk.Label(self.image_landmarks_frame, text=img_text).grid(
+                row=row, column=col, sticky="w", padx=5
+            )
 
         for i, (x, y) in enumerate(landmarks_csv):
             row = i % 6
             col = i // 6
             csv_text = f"#{i+1}: ({x:.1f}, {y:.1f})"
-            ttk.Label(self.csv_landmarks_frame, text=csv_text).grid(row=row, column=col, sticky='w', padx=5)
+            ttk.Label(self.csv_landmarks_frame, text=csv_text).grid(
+                row=row, column=col, sticky="w", padx=5
+            )
 
     def clear_landmarks(self):
         self.image_canvas.delete("landmark")
@@ -169,27 +216,44 @@ class App(tk.Frame):
         img_tk = ImageTk.PhotoImage(overlay_image)
         canvas = tk.Canvas(results_window, width=img_tk.width(), height=img_tk.height())
         canvas.create_image(0, 0, anchor="nw", image=img_tk)
-        canvas.image = img_tk # Keep a reference
+        canvas.image = img_tk  # Keep a reference
         canvas.pack(pady=10, padx=10)
 
         # Stats
         stats_frame = ttk.LabelFrame(results_window, text="Statistics")
         stats_frame.pack(pady=10, padx=10, fill="x")
 
-        matrix_str = "Aff-Matrix:\n" + \
-            f"[{results['affine_matrix'][0][0]:.4f}, {results['affine_matrix'][0][1]:.4f}, {results['affine_matrix'][0][2]:.4f}]\n" + \
-            f"[{results['affine_matrix'][1][0]:.4f}, {results['affine_matrix'][1][1]:.4f}, {results['affine_matrix'][1][2]:.4f}]\n" + \
-            f"[{results['affine_matrix'][2][0]:.4f}, {results['affine_matrix'][2][1]:.4f}, {results['affine_matrix'][2][2]:.4f}]"
-        
-        ttk.Label(stats_frame, text=matrix_str, font="TkFixedFont").grid(row=0, column=0, sticky="w", rowspan=4)
+        matrix_str = (
+            "Aff-Matrix:\n"
+            + f"[{results['affine_matrix'][0][0]:.4f}, {results['affine_matrix'][0][1]:.4f}, {results['affine_matrix'][0][2]:.4f}]\n"
+            + f"[{results['affine_matrix'][1][0]:.4f}, {results['affine_matrix'][1][1]:.4f}, {results['affine_matrix'][1][2]:.4f}]\n"
+            + f"[{results['affine_matrix'][2][0]:.4f}, {results['affine_matrix'][2][1]:.4f}, {results['affine_matrix'][2][2]:.4f}]"
+        )
 
-        ttk.Label(stats_frame, text=f"Min Error: {results['min_error']:.4f}").grid(row=0, column=1, sticky="w", padx=20)
-        ttk.Label(stats_frame, text=f"Max Error: {results['max_error']:.4f}").grid(row=1, column=1, sticky="w", padx=20)
-        ttk.Label(stats_frame, text=f"Mean Error: {results['mean_error']:.4f}").grid(row=2, column=1, sticky="w", padx=20)
-        ttk.Label(stats_frame, text=f"Std Error: {results['std_error']:.4f}").grid(row=3, column=1, sticky="w", padx=20)
-        ttk.Label(stats_frame, text=f"Computation Time: {results['computation_time']:.4f}s").grid(row=4, column=1, sticky="w", padx=20)
+        ttk.Label(stats_frame, text=matrix_str, font="TkFixedFont").grid(
+            row=0, column=0, sticky="w", rowspan=4
+        )
+
+        ttk.Label(stats_frame, text=f"Min Error: {results['min_error']:.4f}").grid(
+            row=0, column=1, sticky="w", padx=20
+        )
+        ttk.Label(stats_frame, text=f"Max Error: {results['max_error']:.4f}").grid(
+            row=1, column=1, sticky="w", padx=20
+        )
+        ttk.Label(stats_frame, text=f"Mean Error: {results['mean_error']:.4f}").grid(
+            row=2, column=1, sticky="w", padx=20
+        )
+        ttk.Label(stats_frame, text=f"Std Error: {results['std_error']:.4f}").grid(
+            row=3, column=1, sticky="w", padx=20
+        )
+        ttk.Label(
+            stats_frame, text=f"Computation Time: {results['computation_time']:.4f}s"
+        ).grid(row=4, column=1, sticky="w", padx=20)
 
         # Save button
-        save_button = ttk.Button(results_window, text="Save Results",
-                                 command=lambda: self.controller.save_results())
+        save_button = ttk.Button(
+            results_window,
+            text="Save Results",
+            command=lambda: self.controller.save_results(),
+        )
         save_button.pack(pady=10)
