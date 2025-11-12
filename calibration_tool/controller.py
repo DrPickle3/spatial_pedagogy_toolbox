@@ -14,6 +14,7 @@ import numpy as np
 import json
 from datetime import datetime
 import os
+import csv
 
 from .analysis import calculate_affine_transform
 from . import image
@@ -117,7 +118,7 @@ class Controller:
             return
         try:
             # Load the CSV data into a NumPy array.
-            raw_data = np.loadtxt(path, delimiter=",")
+            raw_data = np.loadtxt(path, delimiter=",", usecols=(-3, -2), skiprows=1)
             self.model.csv_path = path
             # Preprocess the CSV data, which includes scaling and converting it to an image.
             processed_image = self._preprocess_csv(raw_data)
@@ -363,6 +364,33 @@ class Controller:
                 "Success",
                 f"Results and overlay image saved to:\n{self.model.experiment_path}",
             )
+
+
+            csv_points_padded = np.hstack([self.model.scaled_csv_data, np.ones((self.model.scaled_csv_data.shape[0], 1))])
+            affine_matrix_2x3 = np.array(self.model.calibration_results["affine_matrix"])[:2, :]
+            all_transformed_points = np.dot(csv_points_padded, affine_matrix_2x3.T)
+            # CSV
+            # Load original CSV data again (all columns)
+            with open(self.model.csv_path, newline='', encoding='utf-8') as infile:
+                reader = csv.DictReader(infile)
+                fieldnames = reader.fieldnames
+
+                data_rows = list(reader)
+
+            # Attach results back to rows (keep row order)
+            for row, transformed in zip(data_rows, all_transformed_points):
+                row["x_transformed"] = transformed[0]  # first column
+                row["y_transformed"] = transformed[1]  # second column
+
+            # Write out new CSV with added columns
+            calibrated_path = os.path.join(self.model.experiment_path, "calibrated_points.csv")
+            with open(calibrated_path, "w", newline='', encoding='utf-8') as outfile:
+                writer = csv.DictWriter(outfile, fieldnames=fieldnames + ["x_transformed", "y_transformed"])
+                writer.writeheader()
+                writer.writerows(data_rows)
+
+            self.view.update_status(f"Calibrated points saved to {calibrated_path}")
+            messagebox.showinfo("Success", f"Updated CSV saved to:\n{calibrated_path}")
 
         except Exception as e:
             messagebox.showerror("Save Error", f"Failed to save results: {e}")
