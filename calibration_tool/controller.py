@@ -46,6 +46,11 @@ class Controller:
         self.view = view
         # The experiment path is created in main.py and passed here.
         self.model.experiment_path = experiment_path
+                
+        # Print it to send it to the other python process
+        # We send it as a json object to keep it clean if we want other infos
+        print(json.dumps({"experiment_path": experiment_path}))
+
         # Connect the controller's methods to the view's events (e.g., clicks).
         self._bind_events()
 
@@ -118,10 +123,9 @@ class Controller:
             return
         try:
             # Load the CSV data into a NumPy array.
-            raw_data = np.loadtxt(path, delimiter=",", usecols=(-3, -2), skiprows=1)
             self.model.csv_path = path
             # Preprocess the CSV data, which includes scaling and converting it to an image.
-            processed_image = self._preprocess_csv(raw_data)
+            processed_image = self._preprocess_csv()
             # Convert the resulting image to a Tkinter-compatible format.
             self.model.csv_tk = ImageTk.PhotoImage(processed_image)
             # Tell the view to display the CSV data visualization.
@@ -224,6 +228,7 @@ class Controller:
             # Store the results dictionary in the model.
             self.model.calibration_results = results
 
+            self._calibrate_anchors(self.x_min, self.y_min, self.scale)
             # Generate the visual overlay to show the accuracy of the fit.
             overlay_image = self._create_overlay_image()
             # Tell the view to open the results window.
@@ -235,6 +240,48 @@ class Controller:
             messagebox.showerror(
                 "Error", f"An unexpected error occurred during calibration: {e}"
             )
+
+    def _calibrate_anchors(self, x_min, y_min, scale):
+        """
+        Generates an new JSON that represent the new anchors coordinates.
+
+        It only applies the affine transform to the original anchors
+        """
+        with open("../config.json", "r") as file:
+            data = json.load(file)
+
+        anchors = data["anchors"]
+
+        # --- Convert anchors to array and pad for affine transform ---
+        # Keep only x, y for transform
+        anchor_names = list(anchors.keys())
+        anchor_points = np.array([[v[0], v[1]] for v in anchors.values()])
+
+        # The affine matrix is 3x3, but for transforming 2D points, we only need the 2x3 part.
+        affine_matrix_2x3 = np.array(self.model.calibration_results["affine_matrix"])[
+            :2, :
+        ]
+        anchor_scaled_points = (anchor_points - [x_min, y_min]) * scale
+        # Add a column of ones to apply affine transform
+        anchor_points_padded = np.hstack([
+            anchor_scaled_points, 
+            np.ones((anchor_scaled_points.shape[0], 1))
+        ])
+
+        # --- Apply affine transform ---
+        # affine_matrix_2x3 is shape (2, 3)
+        transformed_xy = np.dot(anchor_points_padded, affine_matrix_2x3.T)
+
+        # --- Rebuild JSON with transformed x, y but same z ---
+        new_anchors = {}
+        for name, (new_x, new_y), (_, _, z) in zip(anchor_names, transformed_xy, anchors.values()):
+            new_anchors[name] = [float(new_x), float(new_y), float(z)]
+
+        # --- Save to a new JSON file ---
+        new_json_path = os.path.join(self.model.experiment_path, "anchors_calibrated.json")
+
+        with open(new_json_path, "w") as new_file:
+            json.dump({"anchors": new_anchors}, new_file, indent=2)
 
     def _create_overlay_image(self):
         """
@@ -395,7 +442,7 @@ class Controller:
         except Exception as e:
             messagebox.showerror("Save Error", f"Failed to save results: {e}")
 
-    def _preprocess_csv(self, raw_data):
+    def _preprocess_csv(self):
         """
         Standardizes the raw CSV data for display and calibration.
 
@@ -408,6 +455,20 @@ class Controller:
         Returns:
             PIL.Image.Image: An image representing the scaled CSV points.
         """
+
+        # Load CSV data
+        with open(self.model.csv_path, newline='', encoding='utf-8') as infile:
+            reader = csv.DictReader(infile)
+            fieldnames = reader.fieldnames
+
+            data_rows = list(reader)
+
+        # Convert to NumPy array of just x_pos and y_pos
+        raw_data = np.array([
+            [float(row["pos_x"]), float(row["pos_y"])]
+            for row in data_rows
+        ])
+
         # --- Step 1: Scale the coordinates to fit the canvas ---
         x_min, y_min = raw_data.min(axis=0)
         x_max, y_max = raw_data.max(axis=0)
@@ -419,6 +480,10 @@ class Controller:
         scale_y = target_dim / (y_max - y_min) if (y_max - y_min) > 0 else 1
         # Use the smaller of the two scaling factors to maintain the aspect ratio.
         scale = min(scale_x, scale_y)
+        
+        self.x_min = x_min
+        self.y_min = y_min
+        self.scale = scale
 
         # Apply the scaling. We first shift the data so the minimum is at (0,0).
         scaled_data = (raw_data - [x_min, y_min]) * scale
