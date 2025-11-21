@@ -7,7 +7,6 @@ logic hub. It responds to user actions from the View (e.g., button clicks),
 interacts with the Model to update the application's state, and calls on
 other modules (like `analysis.py` and `image.py`) to perform specialized tasks.
 """
-import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk, ImageDraw
 import numpy as np
@@ -19,6 +18,17 @@ import csv
 from .analysis import calculate_affine_transform
 from . import image
 
+# I have to add this because I use this script as a subprocess.
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # 2 levels up
+
+# allows python to find utils even when ran as subprocess
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from scripts.utils import img_padding
 
 class Controller:
     """
@@ -147,7 +157,7 @@ class Controller:
         """
         # The canvas has a 25px padding, so we subtract it to get the coordinate
         # relative to the image itself.
-        point = (event.x - 25, event.y - 25)
+        point = (event.x - img_padding, event.y - img_padding)
         if canvas_type == "image":
             # The model handles the logic of adding the point and checking the limit.
             if not self.model.add_image_landmark(point):
@@ -184,12 +194,12 @@ class Controller:
         for i, (x, y) in enumerate(self.model.landmarks_image):
             # Add the padding back for drawing on the canvas.
             self.view.draw_landmark(
-                self.view.image_canvas, x + 25, y + 25, i + 1, color="red"
+                self.view.image_canvas, x + img_padding, y + img_padding, i + 1, color="red"
             )
         # Draw the CSV landmarks in green.
         for i, (x, y) in enumerate(self.model.landmarks_csv):
             self.view.draw_landmark(
-                self.view.csv_canvas, x + 25, y + 25, i + 1, color="green"
+                self.view.csv_canvas, x + img_padding, y + img_padding, i + 1, color="green"
             )
         # Update the text lists of landmarks in the side panel.
         self.view.update_landmark_lists(
@@ -473,8 +483,8 @@ class Controller:
         x_min, y_min = raw_data.min(axis=0)
         x_max, y_max = raw_data.max(axis=0)
 
-        # We want the data to fit within the canvas, leaving a 25px margin.
-        target_dim = self.view.canvas_size - 50
+        # We want the data to fit within the canvas, leaving a 25px (per side) margin.
+        target_dim = self.view.canvas_size - img_padding * 2
         # Calculate the scaling factor needed for each axis.
         scale_x = target_dim / (x_max - x_min) if (x_max - x_min) > 0 else 1
         scale_y = target_dim / (y_max - y_min) if (y_max - y_min) > 0 else 1
