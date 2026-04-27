@@ -8,6 +8,9 @@ from calibration_tool.app import App
 from calibration_tool.model import CalibrationModel
 from calibration_tool.controller import Controller
 
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXPERIMENTS_ROOT = os.path.join(PROJECT_ROOT, "experiments")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="2D Affine Transformation Calibration Tool."
@@ -50,7 +53,8 @@ if __name__ == "__main__":
         root.destroy()
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        experiment_path = os.path.join(os.getcwd(), f"{experiment_name}_{timestamp}")
+        os.makedirs(EXPERIMENTS_ROOT, exist_ok=True)
+        experiment_path = os.path.join(EXPERIMENTS_ROOT, f"{experiment_name}_{timestamp}")
 
         if (
             os.path.exists(experiment_path)
