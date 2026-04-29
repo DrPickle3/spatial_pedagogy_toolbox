@@ -75,10 +75,15 @@ if __name__ == "__main__":
 
         canvas_size = args.canvas_size
         width = canvas_size * 2 + 200
-        height = canvas_size + 300
+        height = canvas_size + 260
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        max_width = max(400, screen_width - 80)
+        max_height = max(300, screen_height - 120)
+        width = min(width, max_width)
+        height = min(height, max_height)
         root.geometry(f"{width}x{height}")
-        root.geometry(f"{width}x{height}")
-        root.minsize(width, height)
+        root.minsize(min(640, width), min(480, height))
         root.resizable(True, True)
 
         model = CalibrationModel()

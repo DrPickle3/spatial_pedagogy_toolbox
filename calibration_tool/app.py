@@ -67,7 +67,7 @@ class App(tk.Frame):
         """
         super().__init__(master)
         self.master = master
-        self.canvas_size = min(400, self.master.winfo_screenheight() // 3)
+        self.canvas_size = canvas_size
         self.master.title("2D Affine Transformation Calibration Tool")
         self.pack(fill="both", expand=True)
 
