@@ -73,15 +73,17 @@ if __name__ == "__main__":
         root.deiconify()
         root.title("2D Affine Transformation Calibration Tool")
 
-        canvas_size = args.canvas_size
-        width = canvas_size * 2 + 200
-        height = canvas_size + 260
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         max_width = max(400, screen_width - 80)
         max_height = max(300, screen_height - 120)
-        width = min(width, max_width)
-        height = min(height, max_height)
+        reserved_width = 200
+        reserved_height = 260
+        max_canvas_by_width = max((max_width - reserved_width) // 2, 1)
+        max_canvas_by_height = max(max_height - reserved_height, 1)
+        canvas_size = min(args.canvas_size, max_canvas_by_width, max_canvas_by_height)
+        width = canvas_size * 2 + reserved_width
+        height = canvas_size + reserved_height
         root.geometry(f"{width}x{height}")
         root.minsize(min(640, width), min(480, height))
         root.resizable(True, True)
