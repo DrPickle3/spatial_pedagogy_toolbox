@@ -403,6 +403,14 @@ class Controller:
                 },
                 "calibration_results": self.model.calibration_results.copy(),
             }
+            if hasattr(self, "x_min") and hasattr(self, "y_min") and hasattr(self, "scale"):
+                data_to_save["preprocess"] = {
+                    "x_min": float(self.x_min),
+                    "y_min": float(self.y_min),
+                    "scale": float(self.scale),
+                    "canvas_size": int(self.view.canvas_size),
+                    "img_padding": int(img_padding),
+                }
             # JSON cannot handle NumPy arrays, so we convert the matrix to a standard list.
             data_to_save["calibration_results"]["affine_matrix"] = data_to_save[
                 "calibration_results"
@@ -507,7 +515,7 @@ class Controller:
         np.savetxt(scaled_csv_path, scaled_data, delimiter=",")
 
         # --- Step 3: Generate an image from the scaled points ---
-        img = self._create_image_from_coords(scaled_data)
+        img = self._create_image_from_coords(scaled_data, target_dim)
 
         # --- Step 4: Save the visualization of the points ---
         visualization_path = os.path.join(
@@ -515,27 +523,21 @@ class Controller:
         )
         img.save(visualization_path)
 
-        # --- Step 5: Crop the generated image to fit the content ---
-        # This removes any excess white space around the points.
-        cropped_img_np = image.auto_crop(np.array(img.convert("RGBA")), borders=50)
-        cropped_img = Image.fromarray(cropped_img_np)
+        return img
 
-        return cropped_img
-
-    def _create_image_from_coords(self, scaled_data):
+    def _create_image_from_coords(self, scaled_data, canvas_dim):
         """
         Draws a set of coordinates onto a new image.
 
         Args:
             scaled_data (np.ndarray): The (N, 2) array of coordinates to draw.
+            canvas_dim (float): The square canvas size for the visualization.
 
         Returns:
             PIL.Image.Image: A new image with the points drawn as black ellipses.
         """
-        # Determine the size of the image needed to contain all points.
-        x_max, y_max = scaled_data.max(axis=0)
-        img_size = (int(x_max + 20), int(y_max + 20)) # Add padding
         # Create a new white image.
+        img_size = (int(canvas_dim + 20), int(canvas_dim + 20))  # Add some padding
         img = Image.new("L", img_size, "white")
         draw = ImageDraw.Draw(img)
 
