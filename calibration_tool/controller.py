@@ -257,7 +257,7 @@ class Controller:
 
         It only applies the affine transform to the original anchors
         """
-        with open("../config.json", "r") as file:
+        with open("../Config/config.json", "r") as file:
             data = json.load(file)
 
         anchors = data["anchors"]
